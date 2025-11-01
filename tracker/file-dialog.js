@@ -28,11 +28,14 @@ class FileDialog extends HTMLElement {
                             option.textContent = trainingBlockName;
                             this.shadowRoot.getElementById("fd-tb-select").appendChild(option);
                             console.log(`fd-tb-select: "${trainingBlockName}" added as an option.`);
-                        })  // end pagination loop
-                    });  // end loop
+                        })
+                        // end pagination loop
+                    });
+                    // end loop
                 }).catch((res) => {
                     console.log(res);
-                });  // end query: getTrainingBlockIdAndNames()
+                });
+                // end query: getTrainingBlockIdAndNames()
             } else {
                 console.log(`${id}: filename attribute is required to open!`)
             }
@@ -105,12 +108,13 @@ class FileDialog extends HTMLElement {
                 border-left: 3px solid rgba(255, 255, 255, 1);
                 display: grid;
                 grid-template-columns: 1fr;
-                grid-template-rows: 1fr 6fr 1fr 1fr;
+                grid-template-rows: 1fr 6fr 1fr 1fr 1fr;
                 gap: 0 0;
                 grid-template-areas:
                 "sm"
                 "uf"
                 "aw"
+                "rw"
                 "eb";
             }
             #fd-tb-select {
@@ -206,6 +210,9 @@ class FileDialog extends HTMLElement {
             #fd-add-week {
                 grid-area: aw;
             }
+            #fd-remove-week {
+                grid-area: rw;
+            }
             #fd-export {
                 grid-area: eb;
             }
@@ -250,8 +257,9 @@ class FileDialog extends HTMLElement {
                     <input id="uf-input-mile" type="number" name="miles" required disabled>
                     <button id="uf-submit" type="submit" disabled>Update</button>
                 </form>
-                <button id="fd-add-week">+ Add Week</button>
-                <button id="fd-export">Export</button>
+                <button id="fd-add-week" disabled>+ Add Week</button>
+                <button id="fd-remove-week" disabled>- Remove Week</button>
+                <button id="fd-export" disabled>Export</button>
             </div>
         </div>`;
 
@@ -259,10 +267,11 @@ class FileDialog extends HTMLElement {
         shadowRoot.getElementById("fd-tb-select").addEventListener("change", this.handleSelectChange);
         shadowRoot.getElementById("update-form").addEventListener("submit", this.handleUpdateFormSubmit);
         shadowRoot.getElementById("fd-add-week").addEventListener("click", this.handleAddWeekClick);
+        shadowRoot.getElementById("fd-remove-week").addEventListener("click", this.handleRemoveWeekClick);
         shadowRoot.getElementById("fd-export").addEventListener("click", this.handleExportClick);
         console.log(`${this.id}: added to the DOM.`)
 
-        // TODO: add + remove week buttons
+        // TODO: add/remove week buttons
         // TODO: make prettier
     }
 
@@ -272,6 +281,7 @@ class FileDialog extends HTMLElement {
         shadowRoot.getElementById("fd-tb-select").removeEventListener("change", this.handleSelectChange);
         shadowRoot.getElementById("update-form").removeEventListener("submit", this.handleUpdateFormSubmit);
         shadowRoot.getElementById("fd-export").removeEventListener("click", this.handleExportClick);
+        shadowRoot.getElementById("fd-remove-week").removeEventListener("click", this.handleRemoveWeekClick);
         shadowRoot.getElementById("fd-add-week").removeEventListener("click", this.handleAddWeekClick);
 
         console.log(`${this.id}: removed from the the DOM.`)
@@ -280,8 +290,9 @@ class FileDialog extends HTMLElement {
     async handleAddWeekClick(event) {
         const fileDialog = document.getElementById("file-dialog");
         const fileName = fileDialog.getAttribute("filename");
+        const tableBody = fileDialog.shadowRoot.getElementById("fd-table-body");
         const db = databases[fileName];
-        let __date, lastWeekId, newWeekId, newWeekNumber;
+        let __date, lastWeekId, newWeekId, newWeekNumber, row, cell;
 
         // begin query getLastWeekByTrainingBlockId()
         await db.getLastWeekByTrainingBlockId(db._activeTrainingBlockId).then((data) => {
@@ -294,12 +305,20 @@ class FileDialog extends HTMLElement {
         if (lastWeekId && newWeekNumber) {
 
             // begin query addWeek()
-            await db.addWeek(db._activeTrainingBlockId, lastWeekNumber + 1).then((data) => {
+            await db.addWeek(db._activeTrainingBlockId, newWeekNumber).then((data) => {
                 newWeekId = data;
                 console.log(`${fileName}: +1 week.`)
             }).catch((res) => {
                 console.log(res);
             });  // end query addWeek()
+
+            // create week element
+            row = document.createElement("tr");
+            row.id = newWeekId;
+            cell = document.createElement("td");  // week.week_number cell
+            cell.id = `${newWeekId}-number`;
+            cell.textContent = newWeekNumber;
+            row.appendChild(cell);
 
             // begin query getDayByWeekIdAndDayNumber()
             await db.getDayByWeekIdAndDayNumber(lastWeekId, 7).then((data) => {
@@ -312,12 +331,77 @@ class FileDialog extends HTMLElement {
                 __date.setDate(__date.getDate() + 1);
 
                 // begin query addDay()
-                await db.addDay(db._activeTrainingBlockId, newWeekId, __date.toISOString().substring(0, 10), i + 1).then(() => {
+                await db.addDay(db._activeTrainingBlockId, newWeekId, __date.toISOString().substring(0, 10), i + 1).then((data) => {
+                    // create day element
+                    cell = document.createElement("td");  // day.miles cell
+                    cell.id = data;
+                    cell.textContent = "0";
+                    row.appendChild(cell);
                     console.log(`${fileName}: +1 day.`)
                 }).catch((res) => {
                     console.log(res);
                 });  // end query addDay()
             }  // end for loop
+
+            // create total and goal elements
+            cell = document.createElement("td");
+            cell.id = `${newWeekId}-miles`;
+            cell.textContent = "0";
+            row.appendChild(cell);
+            cell = document.createElement("td");
+            cell.id = `${newWeekId}-goal`;
+            cell.textContent = "0";
+            row.appendChild(cell);
+            tableBody.appendChild(row);
+        }  // end if
+    }
+
+    async handleRemoveWeekClick(event) {
+        const fileDialog = document.getElementById("file-dialog");
+        const fileName = fileDialog.getAttribute("filename");
+        const tableBody = fileDialog.shadowRoot.getElementById("fd-table-body");
+        const db = databases[fileName];
+        let lastWeekId, dayId;
+
+        // begin query getLastWeekByTrainingBlockId()
+        await db.getLastWeekByTrainingBlockId(db._activeTrainingBlockId).then((data) => {
+            lastWeekId = data[0]["values"][0][0];  // week.week_id
+        }).catch((res) => {
+            console.log(res);
+        });  // end query getLastWeekByTrainingBlockId()
+
+        if (lastWeekId) {
+
+            // begin query getDayByWeekIdAndDayNumber()
+            await db.getDaysByWeekId(lastWeekId).then((dayData) => {
+                // begin outer loop
+                [...dayData].forEach((dayPage) => {
+                    // begin outer pagination loop
+                    [...dayPage.values].forEach((day) => {
+                        // begin query removeDayById()
+                        db.removeDayById(day[0]).then(() => {
+                            console.log(`${fileName}: -1 day.`)
+                        }).catch((res) => {
+                            console.log(res);
+                        });  // end query removeDayById()
+
+                    });
+                });
+            }).catch((res) => {
+                console.log(res);
+            });  // end query getDayByWeekIdAndDayNumber()
+
+            // begin query removeWeekById()
+            await db.removeWeekById(lastWeekId).then(() => {
+                console.log(`${fileName}: -1 week.`)
+            }).catch((res) => {
+                console.log(res);
+            });  // end query removeWeekById()
+
+            console.log(lastWeekId);
+            console.log(fileDialog.shadowRoot.getElementById(lastWeekId));
+
+            tableBody.removeChild(fileDialog.shadowRoot.getElementById(lastWeekId));
         }  // end if
     }
 
@@ -332,9 +416,16 @@ class FileDialog extends HTMLElement {
         Util.clearElements(fileDialog.shadowRoot, "fd-table-body", "tr");
 
         // disable the form
-        Util.disableFormElements(fileDialog.shadowRoot,
-            ["uf-input-week", "uf-dg-select", "uf-input-dg", "uf-input-mile", "uf-submit"]
-        );
+        Util.disableFormElements(fileDialog.shadowRoot, [
+            "fd-add-week",
+            "fd-remove-week",
+            "fd-export",
+            "uf-input-week",
+            "uf-dg-select",
+            "uf-input-dg",
+            "uf-input-mile",
+            "uf-submit"
+        ]);
 
         // hide the dialog
         fileDialog.style.display = "none";
@@ -353,13 +444,13 @@ class FileDialog extends HTMLElement {
         });
     }
 
-    handleSelectChange(event) {
+    async handleSelectChange(event) {
         const fileDialog = document.getElementById("file-dialog");
         const fileName = fileDialog.getAttribute("filename");
         const db = databases[fileName];
         const tableBody = fileDialog.shadowRoot.getElementById("fd-table-body");
         const trainingBlockId = this.value;
-        let row, cell, miles, totalMiles;  // reusable loop variables
+        let row, cell, totalMiles, weekId, weekNumber, weekGoal, dayId, dayMiles;  // reusable loop variables
 
         // clean up fd-table-body
         Util.clearElements(fileDialog.shadowRoot, "fd-table-body", "tr");
@@ -368,7 +459,7 @@ class FileDialog extends HTMLElement {
         db._activeTrainingBlockId = trainingBlockId;
 
         // begin query getWeeksByTrainingBlockId()
-        db.getWeeksByTrainingBlockId(trainingBlockId).then((trainingBlockData) => {
+        await db.getWeeksByTrainingBlockId(trainingBlockId).then((trainingBlockData) => {
             // begin outer loop
             [...trainingBlockData].forEach((trainingBlockPage) => {
                 // begin outer pagination loop
@@ -377,32 +468,37 @@ class FileDialog extends HTMLElement {
                     db.getDaysByWeekId(week[0]).then((weekData) => {  // week[0] = week.week_id
                         // begin inner loop
                         [...weekData].forEach((weekPage) => {
+                            weekId = week[0];
+                            weekGoal = week[1];
+                            weekNumber = week[3];
 
                             row = document.createElement("tr");
+                            row.id = weekId;
                             cell = document.createElement("td");  // week.week_number cell
-                            cell.id = week[0];  // week[0] = week.week_id
-                            cell.textContent = week[3];
+                            cell.id = `${weekId}-number`;
+                            cell.textContent = weekNumber;
                             row.appendChild(cell);
                             totalMiles = 0; // reset
 
                             // begin inner pagination loop
                             [...weekPage.values].forEach((day) => {
                                 // TODO: highlight today's day
-                                miles = day[3];
-                                totalMiles += miles;
+                                dayId = day[0];
+                                dayMiles = day[3];
+                                totalMiles += dayMiles;
                                 cell = document.createElement("td");  // day.miles cell
-                                cell.id = day[0];  // day[0] = day.day_id
-                                cell.textContent = miles;
+                                cell.id = dayId;
+                                cell.textContent = dayMiles;
                                 row.appendChild(cell);
                             });  // end inner pagination loop
 
                             cell = document.createElement("td");  // total day.miles cell
-                            cell.id = `${week[0]}-miles`;  // week[0] = week.week_id
+                            cell.id = `${weekId}-miles`;
                             cell.textContent = totalMiles;
                             row.appendChild(cell);
                             cell = document.createElement("td");  // week.goal cell
-                            cell.id = `${week[0]}-goal`;  // week[0] = week.week_id
-                            cell.textContent = week[1];
+                            cell.id = `${weekId}-goal`;
+                            cell.textContent = weekGoal;
                             row.appendChild(cell);
                             tableBody.appendChild(row);
                         });  // end inner loop
@@ -410,10 +506,17 @@ class FileDialog extends HTMLElement {
                 });  // end outer pagination loop
             });  // end outer loop
 
-            // enable the form
-            Util.enableFormElements(fileDialog.shadowRoot,
-                ["uf-input-week", "uf-dg-select", "uf-input-dg", "uf-input-mile", "uf-submit"]
-            );
+            // enable the form and management buttons
+            Util.enableFormElements(fileDialog.shadowRoot, [
+                "fd-add-week",
+                "fd-remove-week",
+                "fd-export",
+                "uf-input-week",
+                "uf-dg-select",
+                "uf-input-dg",
+                "uf-input-mile",
+                "uf-submit"
+            ]);
         }).catch((res) => {
             console.log(res);
         });  // end query: getWeeksByTrainingBlockId()
@@ -489,8 +592,7 @@ class FileDialog extends HTMLElement {
                 console.log(`week: ${weekNumber}, day: ${dayNumber} updated to ${miles} miles.`);
             }).catch((res) => {
                 console.log(res);
-            });
-            // end query updateMilesByDayId()
+            });  // end query updateMilesByDayId()
         }
     }
 }

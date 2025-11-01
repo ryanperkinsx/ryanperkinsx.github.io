@@ -67,11 +67,10 @@ export class Database {
     }
 
     async addDay(trainingBlockId, weekId, __date, dayNumber) {
-        const dayId = Util.uuidv4()
-        return await this._db.exec(`
+        const dayId = Util.uuidv4();
+        await this._db.exec(`
             INSERT INTO day (day_id, date, day_number, miles, training_block_id, week_id) 
-            VALUES($dayId, $__date, $dayNumber, 0, $trainingBlockId, $weekId)
-            `,
+            VALUES($dayId, $__date, $dayNumber, 0, $trainingBlockId, $weekId)`,
             {
                 "$dayId": dayId,
                 "$__date": __date,
@@ -80,14 +79,14 @@ export class Database {
                 "$weekId": weekId,
             }
         );
+        return dayId;
     }
 
     async addWeek(trainingBlockId, weekNumber) {
         const weekId = Util.uuidv4()
         await this._db.exec(`
             INSERT INTO week (week_id, training_block_id, week_number, goal) 
-            VALUES($weekId, $trainingBlockId, $weekNumber, 0)
-            `,
+            VALUES($weekId, $trainingBlockId, $weekNumber, 0)`,
             {
                 "$weekId": weekId,
                 "$trainingBlockId": trainingBlockId,
@@ -119,6 +118,14 @@ export class Database {
 
     async getDaysByWeekId(id) {
         return await this._db.exec("SELECT * FROM day WHERE week_id=$id", {"$id": id});
+    }
+
+    async removeWeekById(id) {
+        return await this._db.exec(`DELETE FROM week WHERE week_id=$id`, {"$weekId": id});
+    }
+
+    async removeDayById(id) {
+        return await this._db.exec(`DELETE FROM day WHERE day_id=$dayId`, {"$dayId": id});
     }
 
     async updateMilesByDayId(miles, id) {

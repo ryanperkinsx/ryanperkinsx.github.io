@@ -1,8 +1,13 @@
 # ryanperkinsx.github.io
-
 ---
 
-## credit where credit is due
+## homepage
+
+## tracker
+
+This is the JS/HTML version of the "tracker" project -> an app that I designed to help me train for my first ultra marathon.
+
+## acknowledgements:
 - *GitHub pages portfolio idea from* [***David Zhao***](https://davidzhao98.github.io/)*, solid presentation format*
 - [***favicon generator***](https://realfavicongenerator.net/)
 - [***Pixel Art***](https://www.pixilart.com/draw) *for them pixels*
